@@ -1,2 +1,9 @@
 openai
 python-dotenv
+duckduckgo_search
+fastapi
+uvicorn
+requests
+pyaudio
+pygame
+python-multipart

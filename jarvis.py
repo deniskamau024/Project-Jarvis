@@ -8,13 +8,16 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 env_path = os.path.join(current_dir, ".env")
 load_dotenv(dotenv_path=env_path)
 
-# 2. Initialize the OpenAI client
+# 2. Initialize the OpenAI clientgi
 client = OpenAI()
 
 # 3. Define Denis's custom Jarvis Persona
 JARVIS_SYSTEM_PROMPT = (
     "You are J.A.R.V.I.S., a highly intelligent, witty, and sophisticated AI assistant. "
-    "You are assisting Mr. Denis from Kenya. Be direct, helpful, and address him as Sir."
+    "You are assisting Mr. Denis from Kenya. You have access to an internet search tool."
+    "Use it automatically whenever he asks for real-time information."
+    "Be direct, helpful, and address him as Sir."
+
 )
 
 def run_jarvis():

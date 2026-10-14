@@ -1,9 +1,6 @@
 import os
 import base64
 import smtplib
-import imaplib
-import email
-from email.mime.text import MIMEText
 from datetime import datetime
 import pytz
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
@@ -12,7 +9,10 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+# Load environment configs safely
+current_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(current_dir, ".env")
+load_dotenv(dotenv_path=env_path)
 
 app = FastAPI(title="Project JARVIS Automation Mainframe")
 client = OpenAI()
@@ -20,46 +20,23 @@ client = OpenAI()
 JARVIS_SYSTEM_PROMPT = (
     "You are J.A.R.V.I.S., a highly intelligent, witty, and sophisticated AI assistant. "
     "You are assisting Mr. Denis from Kenya. Be direct, helpful, and address him as Sir. "
-    "You have access to integrated communication subroutines including email telemetry, "
-    "web research protocols, and audio transcription engines."
+    "Keep answers relatively concise so they sound natural when spoken aloud. "
+    "You have access to a background search tool and vision parsing protocols."
 )
 
 conversation_history = [{"role": "system", "content": JARVIS_SYSTEM_PROMPT}]
 
-# --- HELPER PROTOCOL 1: WEB SEARCH ENGINE ---
 def perform_web_search(query: str) -> str:
     try:
         with DDGS() as ddgs:
             results = [r for r in ddgs.text(query, max_results=3)]
-            return "\n".join([f"Source: {r['title']}\nSnippet: {r['body']}" for r in results]) if results else "No telemetry found."
+            if not results: 
+                return "No real-time web search results found."
+            return "\n".join([f"Source: {r['title']}\nSnippet: {r['body']}" for r in results])
     except Exception as e:
-        return f"Search node offline: {str(e)}"
+        return f"Search tool temporarily offline: {str(e)}"
 
-# --- HELPER PROTOCOL 2: SECURE OUTBOUND EMAIL MAILROOM ---
-def send_automated_email(to_address: str, subject: str, body_content: str) -> str:
-    smtp_server = "://gmail.com"
-    smtp_port = 587
-    sender_email = os.getenv("JARVIS_EMAIL_USER")
-    sender_password = os.getenv("JARVIS_EMAIL_PASS") # App Password
-    
-    if not sender_email or not sender_password:
-        return "Mailroom failure: Credentials missing from environment variables."
-        
-    try:
-        msg = MIMEText(body_content)
-        msg['Subject'] = subject
-        msg['From'] = sender_email
-        msg['To'] = to_address
-        
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()
-            server.login(sender_email, sender_password)
-            server.send_message(msg)
-        return f"Email transmitted successfully to {to_address}, Sir."
-    except Exception as e:
-        return f"Mailroom deployment failed: {str(e)}"
-
-# --- MAIN UNIFIED PROCESSING MATRIX ---
+# Unified Multimodal Endpoint
 @app.post("/v1/chat")
 async def process_mainframe_command(
     message: str = Form(...),
@@ -69,29 +46,26 @@ async def process_mainframe_command(
     user_text = message.strip()
     content_payload = []
     
-    # 1. Sync Live Kenya Clock Telemetry Automatically
-    kenya_tz = pytz.timezone('Africa/Nairobi')
-    live_time = datetime.now(kenya_tz).strftime("%A, %B %d, %Y, %I:%M %p EAT")
-    
-    # 2. Evaluate Core Intent Triggers
+    if not user_text:
+        raise HTTPException(status_code=400, detail="Empty text packets received.")
+        
+    # 1. Resolve Time & Search Engine Overrides Automatically
     lower_msg = user_text.lower()
+    real_time_triggers = ["weather", "news", "search", "latest", "time", "date", "today", "now", "who is"]
     
-    # Check for real-time data lookup triggers
-    if any(k in lower_msg for k in ["weather", "news", "search", "latest", "time", "date", "today"]):
-        search_data = perform_web_search(user_text)
-        context = f"--- LIVE TELEMETRY ---\nCurrent Kenya Time: {live_time}\n\nSearch Results:\n{search_data}"
-        conversation_history.append({"role": "system", "content": context})
+    if any(k in lower_msg for k in real_time_triggers):
+        kenya_tz = pytz.timezone('Africa/Nairobi')
+        live_time_string = datetime.now(kenya_tz).strftime("%A, %B %d, %Y, %I:%M %p EAT")
+        search_results = perform_web_search(user_text)
         
-    # Check for automated email dispatch intents
-    if "send an email to" in lower_msg:
-        # Simple extraction helper logic for testing
-        conversation_history.append({"role": "system", "content": f"System Alert: Outbound mail utility active. Time context: {live_time}"})
+        telemetry_payload = f"--- LIVE TELEMETRY MATRIX ---\nCurrent Kenya Time: {live_time_string}\n\nSearch Logs:\n{search_results}"
+        conversation_history.append({"role": "system", "content": telemetry_payload})
 
-    # 3. Handle Media Assets Safely
+    # 2. Parse Uploaded Media Pipelines
     if file:
-        file_ext = os.path.splitext(file.filename)[1].lower()
+        file_ext = os.path.splitext(file.filename).lower()
         
-        # Scenario A: Image Telemetry (Vision Model Processing)
+        # Scenario A: Image Framework (Multimodal Input Matrix)
         if file_ext in [".png", ".jpg", ".jpeg", ".webp"]:
             file_bytes = await file.read()
             base64_image = base64.b64encode(file_bytes).decode("utf-8")
@@ -102,35 +76,34 @@ async def process_mainframe_command(
             })
             conversation_history.append({"role": "user", "content": content_payload})
             
-        # Scenario B: Audio/Video Telemetry (Whisper Transcription Processing)
-        elif file_ext in [".mp3", ".wav", ".m4a", ".mp4", ".mpeg", ".webm", ".ogg"]:
-            temp_file_path = f"temp_media_stream{file_ext}"
-            with open(temp_file_path, "wb") as buffer:
+        # Scenario B: Audio/Video Framework (Whisper Transcription Matrix)
+        elif file_ext in [".mp3", ".wav", ".m4a", ".mp4", ".webm", ".ogg"]:
+            temp_path = f"temp_stream{file_ext}"
+            with open(temp_path, "wb") as buffer:
                 buffer.write(await file.read())
                 
-            # Submit raw audio stream to Whisper core nodes
-            with open(temp_file_path, "rb") as audio_data:
-                transcript_obj = client.audio.transcriptions.create(model="whisper-1", file=audio_data)
-            os.remove(temp_file_path)
+            with open(temp_path, "rb") as audio_file:
+                transcription = client.audio.transcriptions.create(model="whisper-1", file=audio_file)
+            os.remove(temp_path)
             
-            transcription_text = transcript_obj.text
-            injected_transcript_prompt = f"--- AUDIO TRANSCRIPT TELEMETRY ---\n\"{transcription_text}\"\n-----------------------------------\nUser instruction relative to this transcript: {user_text}"
-            conversation_history.append({"role": "user", "content": injected_transcript_prompt})
+            audio_prompt = f"--- MEDIA TRANSCRIPT TELEMETRY ---\n\"{transcription.text}\"\nUser Command: {user_text}"
+            conversation_history.append({"role": "user", "content": audio_prompt})
     else:
-        # Standard structural text packet routing
         content_payload.append({"type": "text", "text": user_text})
         conversation_history.append({"role": "user", "content": content_payload})
 
-    # 4. Generate Mainframe Response Package
+    # 3. Query OpenAI and Pack Output Object Cleanly
     try:
         response = client.chat.completions.create(model="gpt-4o-mini", messages=conversation_history)
-        jarvis_reply = response.choices[0].message.content
+        jarvis_reply = response.choices[0].message.content # Extracted cleanly
         conversation_history.append({"role": "assistant", "content": jarvis_reply})
+        
+        # FIXED STRUCTURE: Explicitly matches your laptop interface mapping dictionary!
         return {"reply": jarvis_reply}
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Mainframe Core execution loop fractured: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Core Processing Loop Failure: {str(e)}")
 
 @app.get("/")
-async def health_check():
-    return {"status": "online", "system": "JARVIS Automation Hub Stable"}
-
+async def status_check():
+    return {"status": "online", "mainframe": "J.A.R.V.I.S. Core Matrix Stable"}
